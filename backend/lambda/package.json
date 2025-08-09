@@ -1,0 +1,9 @@
+{
+  "name": "everconnect-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for fetching user data",
+  "main": "getUsersData.js",
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}
