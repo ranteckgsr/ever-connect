@@ -1,12 +1,11 @@
 const { Client } = require('pg');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const AWS = require('aws-sdk');
 
-// Initialize S3 client - Lambda will automatically use its execution role
-// DO NOT set credentials - Lambda provides them via IAM role
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'ca-central-1'
-  // No credentials - uses Lambda execution role automatically
+// Initialize S3 with the Lambda execution role (no explicit credentials needed)
+// Lambda automatically provides credentials via its execution role
+const s3 = new AWS.S3({
+  region: process.env.AWS_REGION || 'ca-central-1',
+  signatureVersion: 'v4'
 });
 
 exports.handler = async (event) => {
@@ -23,6 +22,7 @@ exports.handler = async (event) => {
 
   try {
     await client.connect();
+    console.log('Connected to database');
 
     // Query to get all users with uploaded files
     const query = `
@@ -37,20 +37,21 @@ exports.handler = async (event) => {
     `;
 
     const result = await client.query(query);
+    console.log(`Found ${result.rows.length} users with files`);
     
     // Generate presigned URLs for each file
-    const entriesWithSignedUrls = await Promise.all(
+    const entries = await Promise.all(
       result.rows.map(async (row) => {
         try {
-          // Extract the S3 key from storage_location or s3_url
+          // Extract the S3 key from storage_location
           let s3Key = row.storage_location;
           
           if (!s3Key && row.s3_url) {
-            // Extract key from full S3 URL
+            // Extract key from full S3 URL if storage_location is missing
             // Format: https://bucket.s3.amazonaws.com/user-files/1/file.txt
-            const urlParts = row.s3_url.split('.s3.amazonaws.com/');
-            if (urlParts.length > 1) {
-              s3Key = urlParts[1];
+            const matches = row.s3_url.match(/\.s3[.-].*?\.amazonaws\.com\/(.+)$/);
+            if (matches && matches[1]) {
+              s3Key = matches[1];
             }
           }
           
@@ -59,18 +60,17 @@ exports.handler = async (event) => {
             return {
               'First Name': row.first_name,
               'Phone Number': row.phone_number || '',
-              'File Upload': row.s3_url // Fallback to direct URL
+              'File Upload': row.s3_url // Return original URL as fallback
             };
           }
           
-          // Generate presigned URL using AWS SDK v3
-          const command = new GetObjectCommand({
-            Bucket: process.env.S3_BUCKET_NAME || 'everconnect-user-files',
-            Key: s3Key
-          });
+          console.log(`Generating presigned URL for: ${s3Key}`);
           
-          const signedUrl = await getSignedUrl(s3Client, command, { 
-            expiresIn: 3600 // 1 hour
+          // Generate presigned URL using the Lambda's IAM role
+          const signedUrl = await s3.getSignedUrlPromise('getObject', {
+            Bucket: process.env.S3_BUCKET_NAME || 'everconnect-user-files',
+            Key: s3Key,
+            Expires: 3600 // URL valid for 1 hour
           });
           
           return {
@@ -83,7 +83,7 @@ exports.handler = async (event) => {
           return {
             'First Name': row.first_name,
             'Phone Number': row.phone_number || '',
-            'File Upload': row.s3_url // Fallback to direct URL
+            'File Upload': row.s3_url // Fallback to original URL
           };
         }
       })
@@ -98,20 +98,23 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Methods': 'GET, OPTIONS'
       },
       body: JSON.stringify({
-        entries: entriesWithSignedUrls
+        entries: entries
       })
     };
 
     return response;
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Lambda Error:', error);
     return {
       statusCode: 500,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ error: 'Internal server error' })
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        message: error.message 
+      })
     };
   } finally {
     await client.end();
