@@ -12,7 +12,6 @@ dist/
 dist-ssr/
 build/
 *.local
-
 # Environment variables
 .env
 .env.local
@@ -90,3 +89,10 @@ backend/lambda/lambda-deployment.zip
 *.pid
 *.seed
 *.pid.lock
+INFRASTRUCTURE_DOCUMENTATION.md
+LAMBDA_DEPLOYMENT_GUIDE.md
+CHECK_CREDENTIALS.md
+DEPLOY_INSTRUCTIONS.md
+DEPLOYMENT_CHECKLIST.md
+DOCKER_TESTING_GUIDE.md
+USER_LOGIN_CREDENTIALS.md

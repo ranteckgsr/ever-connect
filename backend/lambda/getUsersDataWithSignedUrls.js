@@ -2,11 +2,13 @@ const { Client } = require('pg');
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-// Initialize S3 client - Lambda will automatically use its execution role
-// DO NOT set credentials - Lambda provides them via IAM role
+// Initialize S3 client
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'ca-central-1'
-  // No credentials - uses Lambda execution role automatically
+  region: process.env.AWS_REGION || 'ca-central-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  }
 });
 
 exports.handler = async (event) => {
@@ -63,7 +65,7 @@ exports.handler = async (event) => {
             };
           }
           
-          // Generate presigned URL using AWS SDK v3
+          // Generate presigned URL (valid for 1 hour)
           const command = new GetObjectCommand({
             Bucket: process.env.S3_BUCKET_NAME || 'everconnect-user-files',
             Key: s3Key

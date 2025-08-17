@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(aws s3 ls:*)",
+      "Bash(create-lambda-zip.bat)",
+      "Bash(aws cloudfront:*)"
     ],
     "deny": []
   }
