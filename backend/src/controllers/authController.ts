@@ -30,19 +30,29 @@ export const signupWithFile = async (req: MulterRequest, res: Response): Promise
   });
 
   try {
-    // Validate required fields
-    if (!username || !firstName || !lastName || !email || !password) {
+    // Validate required fields including phone number
+    if (!username || !firstName || !lastName || !email || !password || !phoneNumber) {
       const missingFields = {
         username: !username,
         firstName: !firstName,
         lastName: !lastName,
         email: !email,
-        password: !password
+        password: !password,
+        phoneNumber: !phoneNumber
       };
       log.warn('Signup validation failed - missing fields', { missingFields, email, username });
       return res.status(400).json({ 
-        error: 'All fields are required',
+        error: 'All fields are required including phone number',
         missing: missingFields
+      });
+    }
+
+    // Validate phone number format (at least 10 digits)
+    const phoneDigits = phoneNumber.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      log.warn('Signup validation failed - invalid phone number', { phoneNumber, phoneDigits });
+      return res.status(400).json({ 
+        error: 'Phone number must have at least 10 digits' 
       });
     }
 

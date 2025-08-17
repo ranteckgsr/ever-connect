@@ -1,0 +1,179 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ca-central-1
+  EB_APPLICATION_NAME: everconnect-backend
+  EB_ENVIRONMENT_NAME: ec-backend-api-env
+  S3_BUCKET_FRONTEND: everconnect-frontend
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '22'
+        
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: npm ci
+      
+    - name: Build backend
+      working-directory: ./backend
+      run: npm run build
+      
+    - name: Create deployment package
+      working-directory: ./backend
+      run: |
+        # Create a deployment package with Linux-compatible paths
+        npm install -g archiver-cli
+        archiver-cli zip everconnect-backend.zip \
+          --include "dist/**" \
+          --include ".ebextensions/**" \
+          --include "package.json" \
+          --include "package-lock.json" \
+          --include "Procfile" \
+          --exclude "node_modules/**" \
+          --exclude "src/**" \
+          --exclude "*.ts"
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy to Elastic Beanstalk
+      working-directory: ./backend
+      run: |
+        # Generate version label with timestamp
+        VERSION_LABEL="deploy-$(date +%Y%m%d-%H%M%S)"
+        
+        # Upload the application version
+        aws s3 cp everconnect-backend.zip s3://elasticbeanstalk-${{ env.AWS_REGION }}-${{ secrets.AWS_ACCOUNT_ID }}/$VERSION_LABEL.zip
+        
+        # Create application version
+        aws elasticbeanstalk create-application-version \
+          --application-name ${{ env.EB_APPLICATION_NAME }} \
+          --version-label $VERSION_LABEL \
+          --source-bundle S3Bucket="elasticbeanstalk-${{ env.AWS_REGION }}-${{ secrets.AWS_ACCOUNT_ID }}",S3Key="$VERSION_LABEL.zip" \
+          --region ${{ env.AWS_REGION }}
+        
+        # Update environment
+        aws elasticbeanstalk update-environment \
+          --application-name ${{ env.EB_APPLICATION_NAME }} \
+          --environment-name ${{ env.EB_ENVIRONMENT_NAME }} \
+          --version-label $VERSION_LABEL \
+          --region ${{ env.AWS_REGION }}
+        
+        # Wait for environment to be ready
+        aws elasticbeanstalk wait environment-updated \
+          --application-name ${{ env.EB_APPLICATION_NAME }} \
+          --environment-name ${{ env.EB_ENVIRONMENT_NAME }} \
+          --region ${{ env.AWS_REGION }}
+
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build frontend
+      env:
+        VITE_API_URL: https://d3k22x6u1296cn.cloudfront.net
+      run: npm run build
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy to S3
+      run: |
+        aws s3 sync dist/ s3://${{ env.S3_BUCKET_FRONTEND }} --delete
+    
+    - name: Invalidate CloudFront
+      run: |
+        aws cloudfront create-invalidation \
+          --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+          --paths "/*"
+
+  deploy-lambda:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        
+    - name: Prepare Lambda package
+      working-directory: ./backend/lambda
+      run: |
+        npm ci --production
+        zip -r lambda-deployment.zip .
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Deploy Lambda function
+      working-directory: ./backend/lambda
+      run: |
+        aws lambda update-function-code \
+          --function-name getUsersData \
+          --zip-file fileb://lambda-deployment.zip \
+          --region ${{ env.AWS_REGION }}
+
+  test-deployment:
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    
+    steps:
+    - name: Test backend health
+      run: |
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://d3k22x6u1296cn.cloudfront.net/health)
+        if [ $response -eq 200 ]; then
+          echo "✅ Backend is healthy"
+        else
+          echo "❌ Backend health check failed with status: $response"
+          exit 1
+        fi
+    
+    - name: Test frontend
+      run: |
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://d19uhu9egx8jfr.cloudfront.net)
+        if [ $response -eq 200 ]; then
+          echo "✅ Frontend is accessible"
+        else
+          echo "❌ Frontend check failed with status: $response"
+          exit 1
+        fi
