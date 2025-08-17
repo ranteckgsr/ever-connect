@@ -37,7 +37,7 @@ export default function Signup() {
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  const API_URL = 'https://d3k22x6u1296cn.cloudfront.net';
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),

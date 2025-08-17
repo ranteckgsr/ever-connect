@@ -2,6 +2,8 @@
 
 A modern web application for building meaningful connections that last forever. EverConnect provides a secure platform for users to connect, share files, and manage their profiles.
 
+🌐 **Live Application:** https://d19uhu9egx8jfr.cloudfront.net
+
 ## Features
 
 - **User Authentication**: Secure signup and login system with JWT tokens

@@ -75,6 +75,11 @@ backend/.env.*
 # AWS
 .aws/
 aws-exports.js
+backend/everconnect-backend.zip
+backend/everconnect-backend.tar.gz
+backend/lambda/lambda-deployment.zip
+*.zip
+*.tar.gz
 
 # Misc
 .cache/

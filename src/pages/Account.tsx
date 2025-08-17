@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { FileText, Download, Upload, Loader2, User, FolderOpen, Settings, BarChart3 } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = 'https://d3k22x6u1296cn.cloudfront.net';
 
 const updateSchema = z.object({
   file: z.instanceof(FileList).optional().refine(
