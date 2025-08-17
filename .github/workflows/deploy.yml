@@ -36,16 +36,7 @@ jobs:
       working-directory: ./backend
       run: |
         # Create a deployment package with Linux-compatible paths
-        npm install -g archiver-cli
-        archiver-cli zip everconnect-backend.zip \
-          --include "dist/**" \
-          --include ".ebextensions/**" \
-          --include "package.json" \
-          --include "package-lock.json" \
-          --include "Procfile" \
-          --exclude "node_modules/**" \
-          --exclude "src/**" \
-          --exclude "*.ts"
+        zip -r everconnect-backend.zip dist/ .ebextensions/ package.json package-lock.json Procfile -x "*.ts" "src/*" "node_modules/*"
     
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -115,6 +106,7 @@ jobs:
         aws s3 sync dist/ s3://${{ env.S3_BUCKET_FRONTEND }} --delete
     
     - name: Invalidate CloudFront
+      if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
       run: |
         aws cloudfront create-invalidation \
           --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
