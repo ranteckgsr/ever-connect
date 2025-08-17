@@ -2,5 +2,5 @@
   "watch": ["src"],
   "ext": "ts",
   "ignore": ["src/**/*.spec.ts"],
-  "exec": "npx ts-node -r tsconfig-paths/register src/server.ts"
+  "exec": "npm run build && node dist/server.js"
 }

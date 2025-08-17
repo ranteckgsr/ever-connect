@@ -1,0 +1,16 @@
+{
+  "name": "everconnect-scripts",
+  "version": "1.0.0",
+  "description": "Management scripts for EverConnect application",
+  "scripts": {
+    "setup": "npm install",
+    "view-db": "node view-database.js",
+    "view-s3": "node view-s3-files.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.1",
+    "pg": "^8.11.3"
+  }
+}
